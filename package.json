@@ -15,7 +15,7 @@
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.400.0",
-    "next": "15.3.0",
+    "next": "15.3.8",
     "papaparse": "^5.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
