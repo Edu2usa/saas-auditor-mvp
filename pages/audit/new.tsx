@@ -8,6 +8,11 @@ import DropZone from '@/components/DropZone';
 import type { ParsedCSV } from '@/types';
 import { BarChart3, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
 
+// Client-side CSV size / row limits (mirrors server-side guards in /api/parse-csv)
+const MAX_CSV_BYTES = 5 * 1024 * 1024;
+const MAX_CSV_ROWS = 10_000;
+const MAX_AUDIT_NAME_LENGTH = 200;
+
 export default function NewAudit() {
   const router = useRouter();
   const [auditName, setAuditName] = useState('');
@@ -23,6 +28,18 @@ export default function NewAudit() {
 
   function handleFileParsed(csvText: string, fileName: string) {
     setError('');
+
+    // Client-side guards — mirrors server-side limits
+    if (Buffer.byteLength(csvText, 'utf8') > MAX_CSV_BYTES) {
+      setError(`CSV file is too large (max ${MAX_CSV_BYTES / 1024 / 1024} MB).`);
+      return;
+    }
+    const rowCount = csvText.split('\n').length - 1;
+    if (rowCount > MAX_CSV_ROWS) {
+      setError(`CSV has too many rows (max ${MAX_CSV_ROWS.toLocaleString()}).`);
+      return;
+    }
+
     try {
       const result = parseCSVText(csvText);
       setParsed(result);
@@ -37,32 +54,45 @@ export default function NewAudit() {
 
   async function handleSave() {
     if (!parsed || !auditName.trim()) return;
+
+    const trimmedName = auditName.trim();
+    if (trimmedName.length > MAX_AUDIT_NAME_LENGTH) {
+      setError(`Audit name must be ${MAX_AUDIT_NAME_LENGTH} characters or fewer.`);
+      return;
+    }
+
     setSaving(true);
     setError('');
 
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) { router.push('/'); return; }
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) { router.push('/'); return; }
 
-    const { data, error: dbError } = await supabase
-      .from('audits')
-      .insert({
-        user_id: session.session.user.id,
-        name: auditName.trim(),
-        status: 'complete',
+    const token = sessionData.session.access_token;
+
+    // POST through the API route so server-side validation and rate-limiting apply
+    const res = await fetch('/api/audits', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name: trimmedName,
         total_monthly_cost: parsed.total_monthly_cost,
         total_annual_cost: parsed.total_annual_cost,
         vendor_count: parsed.vendor_count,
         report_data: parsed,
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (dbError) {
-      setError(dbError.message);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? `Save failed (${res.status})`);
       setSaving(false);
       return;
     }
 
+    const data = await res.json();
     router.push(`/audit/${data.id}`);
   }
 
@@ -188,6 +218,7 @@ Figma,360.00,3,annual`}</pre>
                     type="text"
                     className="input mb-4"
                     placeholder="e.g. Q2 2026 SaaS Audit"
+                    maxLength={MAX_AUDIT_NAME_LENGTH}
                     value={auditName}
                     onChange={(e) => setAuditName(e.target.value)}
                   />
