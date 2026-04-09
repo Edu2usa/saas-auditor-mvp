@@ -27,14 +27,14 @@ const reportDataSchema = z.object({
         category: z.string().max(200),
         monthly_cost: z.number().finite().nonnegative(),
         annual_cost: z.number().finite().nonnegative(),
-        vendor_count: z.number().int().nonneg(),
+        vendor_count: z.number().int().nonnegative(),
         color: z.string().max(50),
       })
     )
     .max(200),
   total_monthly_cost: z.number().finite().nonnegative(),
   total_annual_cost: z.number().finite().nonnegative(),
-  vendor_count: z.number().int().nonneg().max(10_000),
+  vendor_count: z.number().int().nonnegative().max(10_000),
   warnings: z.array(z.string().max(500)).max(1_000),
 });
 
@@ -42,7 +42,7 @@ const createAuditBody = z.object({
   name: z.string().min(1, 'name is required').max(200, 'name must be 200 chars or fewer').trim(),
   total_monthly_cost: z.number().finite().nonnegative(),
   total_annual_cost: z.number().finite().nonnegative(),
-  vendor_count: z.number().int().nonneg().max(10_000),
+  vendor_count: z.number().int().nonnegative().max(10_000),
   report_data: reportDataSchema,
 });
 
