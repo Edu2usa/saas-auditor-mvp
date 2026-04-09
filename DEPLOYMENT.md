@@ -13,29 +13,30 @@ In Supabase Dashboard → SQL Editor, run this:
 
 ```sql
 -- Create audits table
+-- Column names must match exactly what the application code inserts/reads.
 create table audits (
-  id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users(id) on delete cascade,
-  name text not null,
-  filename text not null,
-  total_spend numeric,
-  saas_count int,
-  categories jsonb,
-  saas_list jsonb,
-  created_at timestamp default now(),
-  updated_at timestamp default now()
+  id                 uuid    default gen_random_uuid() primary key,
+  user_id            uuid    references auth.users(id) on delete cascade not null,
+  name               text    not null,
+  status             text    not null default 'complete',
+  total_monthly_cost numeric not null default 0,
+  total_annual_cost  numeric not null default 0,
+  vendor_count       int     not null default 0,
+  report_data        jsonb,
+  created_at         timestamptz default now() not null
 );
 
 -- Create indexes
-create index audits_user_id_idx on audits(user_id);
+create index audits_user_id_idx   on audits(user_id);
 create index audits_created_at_idx on audits(created_at desc);
 
--- Enable RLS
+-- Enable RLS — without these policies all queries from the anon key will
+-- return zero rows (RLS blocks by default when no policy matches).
 alter table audits enable row level security;
-create policy "Users can view own audits" on audits for select using (auth.uid() = user_id);
+create policy "Users can view own audits"   on audits for select using      (auth.uid() = user_id);
 create policy "Users can insert own audits" on audits for insert with check (auth.uid() = user_id);
-create policy "Users can update own audits" on audits for update using (auth.uid() = user_id);
-create policy "Users can delete own audits" on audits for delete using (auth.uid() = user_id);
+create policy "Users can update own audits" on audits for update using      (auth.uid() = user_id);
+create policy "Users can delete own audits" on audits for delete using      (auth.uid() = user_id);
 ```
 
 ### 3. Get Your API Keys
@@ -43,7 +44,8 @@ create policy "Users can delete own audits" on audits for delete using (auth.uid
 2. Copy:
    - **Project URL** → NEXT_PUBLIC_SUPABASE_URL
    - **Anon Key** → NEXT_PUBLIC_SUPABASE_ANON_KEY
-   - **Service Role Key** → SUPABASE_SERVICE_ROLE_KEY
+
+> The Service Role Key is **not** needed and should not be set.
 
 ### 4. Deploy to Vercel
 1. Go to https://vercel.com/new
@@ -61,9 +63,12 @@ Add these to Vercel Project Settings → Environment Variables:
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 ```
+
+> **Note:** The `SUPABASE_SERVICE_ROLE_KEY` is no longer used by this application.
+> API routes use the anon key and rely on Postgres RLS policies for data isolation.
+> Do **not** expose the service role key to the app.
 
 ---
 
